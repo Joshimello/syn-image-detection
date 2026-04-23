@@ -1,0 +1,42 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments and local Python version files
+.venv/
+venv/
+env/
+ENV/
+
+# Test, lint, and type-checker caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Build and packaging outputs
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# IDE and OS noise
+.idea/
+.vscode/
+.DS_Store
+
+# Project-generated training outputs
+artifacts/
+
+# Local datasets and derived metadata
+data/raw/
+data/metadata/
+
+# TensorBoard and experiment logs
+runs/
+wandb/
+mlruns/
+

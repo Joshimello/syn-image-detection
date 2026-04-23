@@ -1,0 +1,45 @@
+paths:
+  corvi_dir: data/raw/corvi
+  coco_train_dir: data/raw/coco_train2017/train2017
+  val_real_dir: data/raw/itw_val/ITW-SM/0_real
+  val_fake_dir: data/raw/itw_val/ITW-SM/1_fake
+  test_dir: data/raw/test/taska_test
+  metadata_path: data/metadata/index.parquet
+  metadata_csv_path: data/metadata/index.csv
+  runs_root: artifacts/runs
+
+data:
+  input_size: 224
+  resize_min_short_side: 256
+  max_train_real: 50000
+  max_train_fake: 50000
+  train_resize_degrade_probability: 0.5
+  batch_size: 16
+  num_workers: 8
+
+model:
+  model_name: ViT-L-14
+  pretrained: openai
+  projection_dim: 256
+  hidden_dim: 256
+  dropout: 0.5
+
+train:
+  run_name: constrained_clip_l14
+  seed: 1337
+  device: cuda
+  epochs: 3
+  learning_rate: 0.0003
+  weight_decay: 0.0001
+  amp: true
+  grad_accum_steps: 1
+  early_stopping_patience: 1
+  log_every_steps: 50
+
+eval:
+  threshold_grid_size: 1001
+  jpeg_qualities: [95, 85, 75]
+  size_bucket_edges: [512, 1024]
+
+outputs:
+  team_name: teamname

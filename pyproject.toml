@@ -1,0 +1,78 @@
+[build-system]
+requires = ["uv_build>=0.8.11,<0.9.0"]
+build-backend = "uv_build"
+
+[project]
+name = "me26sid"
+version = "0.1.0"
+description = "Task A bootstrap for MediaEval 2026 synthetic image detection"
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+  "numpy>=2.2,<3",
+  "opencv-python>=4.11,<5",
+  "open-clip-torch>=2.32,<3",
+  "pandas>=2.2,<3",
+  "pillow>=11,<12",
+  "pyarrow>=20,<21",
+  "pydantic>=2.11,<3",
+  "pyyaml>=6.0.2,<7",
+  "rich>=14,<15",
+  "scikit-learn>=1.7,<2",
+  "tensorboard>=2.19,<3",
+  "timm>=1.0.19,<2",
+  "torch>=2.7,<3",
+  "torchaudio>=2.7,<3",
+  "torchvision>=0.22,<1",
+]
+
+[dependency-groups]
+dev = [
+  "mypy>=1.15,<2",
+  "pytest>=8.3,<9",
+  "pytest-cov>=6.1,<7",
+  "ruff>=0.11,<0.12",
+  "types-PyYAML>=6.0.12,<7",
+]
+
+[project.scripts]
+me26sid-train = "me26sid.cli:main"
+me26sid-eval = "me26sid.cli:main"
+me26sid-calibrate = "me26sid.cli:main"
+me26sid-export-submission = "me26sid.cli:main"
+me26sid-inspect-data = "me26sid.cli:main"
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv]
+package = true
+default-groups = ["dev"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+torchaudio = { index = "pytorch-cu128" }
+torchvision = { index = "pytorch-cu128" }
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+ignore_missing_imports = true
+
+[tool.uv.build-backend]
+module-root = "src"
