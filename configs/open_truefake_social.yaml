@@ -1,0 +1,64 @@
+paths:
+  corvi_dir: data/raw/corvi
+  coco_train_dir: data/raw/coco_train2017/train2017
+  truefake_social_dir: data/raw/truefake_social
+  val_real_dir: data/raw/itw_val/ITW-SM/0_real
+  val_fake_dir: data/raw/itw_val/ITW-SM/1_fake
+  test_dir: data/raw/test/taska_test
+  metadata_path: data/metadata/open_truefake_social_135k.parquet
+  metadata_csv_path: data/metadata/open_truefake_social_135k.csv
+  runs_root: artifacts/runs
+
+data:
+  input_size: 224
+  resize_min_short_side: 256
+  max_train_real:
+  max_train_fake:
+  official_max_train_real: 75000
+  official_max_train_fake: 75000
+  truefake_social_max_real: 60000
+  truefake_social_max_fake: 60000
+  truefake_social_fake_per_bucket: 2500
+  small_image_oversample_threshold: 512
+  small_image_oversample_factor: 1.25
+  train_jpeg_probability: 0.5
+  train_jpeg_quality_min: 50
+  train_jpeg_quality_max: 100
+  train_resize_degrade_probability: 0.6
+  train_resize_degrade_min: 80
+  train_resize_degrade_max: 192
+  batch_size: 16
+  num_workers: 8
+
+model:
+  model_name: ViT-L-14
+  pretrained: openai
+  projection_dim: 256
+  hidden_dim: 256
+  dropout: 0.5
+
+train:
+  run_name: open_clip_l14_unfreeze_last2_smallimg_truefake_social_135k_epochs3
+  seed: 1337
+  device: cuda
+  epochs: 3
+  learning_rate: 0.0003
+  head_learning_rate: 0.0003
+  backbone_learning_rate: 0.00001
+  weight_decay: 0.0001
+  amp: true
+  grad_accum_steps: 1
+  unfreeze_last_n_blocks: 2
+  gradient_clip_norm: 1.0
+  early_stopping_patience: 1
+  log_every_steps: 50
+
+eval:
+  num_crops: 1
+  threshold_grid_size: 1001
+  jpeg_qualities: [95, 85, 75]
+  size_bucket_edges: [512, 1024]
+
+outputs:
+  team_name: teamname
+  run_type: open

@@ -12,6 +12,7 @@ from me26sid.utils import find_project_root, resolve_input_path, resolve_output_
 class PathsConfig(BaseModel):
     corvi_dir: Path = Path("data/raw/corvi")
     coco_train_dir: Path = Path("data/raw/coco_train2017")
+    truefake_social_dir: Path | None = None
     val_real_dir: Path = Path("data/raw/itw_val/ITW-SM/0_real")
     val_fake_dir: Path = Path("data/raw/itw_val/ITW-SM/1_fake")
     test_dir: Path = Path("data/raw/test/taska_test")
@@ -25,6 +26,11 @@ class DataConfig(BaseModel):
     resize_min_short_side: int = 256
     max_train_real: int | None = 50_000
     max_train_fake: int | None = 50_000
+    official_max_train_real: int | None = None
+    official_max_train_fake: int | None = None
+    truefake_social_max_real: int | None = None
+    truefake_social_max_fake: int | None = None
+    truefake_social_fake_per_bucket: int | None = None
     small_image_oversample_threshold: int | None = None
     small_image_oversample_factor: float = 1.0
     patch_mask_probability: float = 0.0
@@ -83,6 +89,7 @@ class EvalConfig(BaseModel):
 
 class OutputConfig(BaseModel):
     team_name: str = "teamname"
+    run_type: str = "constrained"
 
 
 class Settings(BaseModel):
@@ -115,7 +122,7 @@ class Settings(BaseModel):
         return self.run_dir() / "robustness.json"
 
     def submission_path(self) -> Path:
-        filename = f"{self.outputs.team_name}_constrained.csv"
+        filename = f"{self.outputs.team_name}_{self.outputs.run_type}.csv"
         return self.run_dir() / filename
 
 
@@ -131,7 +138,14 @@ def load_settings(config_path: Path, run_name_override: str | None = None) -> Se
     base_dir = config_path.parent.resolve()
     project_root = find_project_root()
     paths = raw.setdefault("paths", {})
-    input_keys = {"corvi_dir", "coco_train_dir", "val_real_dir", "val_fake_dir", "test_dir"}
+    input_keys = {
+        "corvi_dir",
+        "coco_train_dir",
+        "truefake_social_dir",
+        "val_real_dir",
+        "val_fake_dir",
+        "test_dir",
+    }
     output_keys = {"metadata_path", "metadata_csv_path", "runs_root"}
     for key, value in list(paths.items()):
         if value is None:

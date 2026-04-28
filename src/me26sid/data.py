@@ -41,7 +41,11 @@ class SampleRecord:
 def iter_images(root: Path) -> list[Path]:
     if not root.exists():
         raise FileNotFoundError(f"Missing dataset directory: {root}")
-    return sorted(path for path in root.rglob("*") if path.suffix.lower() in IMAGE_EXTENSIONS)
+    return sorted(
+        path
+        for path in root.rglob("*")
+        if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS
+    )
 
 
 def read_image_metadata(path: Path) -> tuple[int, int, str]:
@@ -51,32 +55,131 @@ def read_image_metadata(path: Path) -> tuple[int, int, str]:
     return width, height, image_format
 
 
+def sample_paths(paths: list[Path], cap: int | None, seed: int) -> list[Path]:
+    if cap is None or len(paths) <= cap:
+        return paths
+    rng = random.Random(seed)
+    return sorted(rng.sample(paths, cap))
+
+
+def append_records(
+    records: list[SampleRecord],
+    *,
+    paths: list[Path],
+    split: str,
+    source: str,
+    label: float | None,
+    image_id_root: Path | None = None,
+) -> None:
+    console.print(f"Indexing {len(paths)} images from {source}")
+    for path in paths:
+        width, height, image_format = read_image_metadata(path)
+        image_id = path.name
+        if image_id_root is not None:
+            image_id = path.relative_to(image_id_root).as_posix()
+        records.append(
+            SampleRecord(
+                image_id=image_id,
+                image_path=str(path.resolve()),
+                label=label,
+                split=split,
+                source_dataset=source,
+                width=width,
+                height=height,
+                file_format=image_format,
+            )
+        )
+
+
+def truefake_social_real_paths(root: Path) -> list[Path]:
+    return sorted(
+        path
+        for platform in ("Facebook", "Telegram", "Twitter")
+        for path in iter_images(root / platform / "Real")
+    )
+
+
+def truefake_social_fake_bucket_paths(root: Path) -> dict[str, list[Path]]:
+    buckets: dict[str, list[Path]] = {}
+    for platform in ("Facebook", "Telegram", "Twitter"):
+        fake_root = root / platform / "Fake"
+        if not fake_root.exists():
+            raise FileNotFoundError(f"Missing TrueFake fake directory: {fake_root}")
+        for family_dir in sorted(path for path in fake_root.iterdir() if path.is_dir()):
+            key = f"{platform}/{family_dir.name}"
+            buckets[key] = iter_images(family_dir)
+    return buckets
+
+
+def truefake_social_fake_paths(settings: Settings, root: Path) -> list[Path]:
+    buckets = truefake_social_fake_bucket_paths(root)
+    per_bucket = settings.data.truefake_social_fake_per_bucket
+    if per_bucket is not None:
+        paths: list[Path] = []
+        for key, bucket_paths in sorted(buckets.items()):
+            selected = sample_paths(bucket_paths, per_bucket, settings.train.seed)
+            console.print(f"Selected {len(selected)} TrueFake fake images from {key}")
+            paths.extend(selected)
+        return sorted(paths)
+
+    all_paths = sorted(path for bucket_paths in buckets.values() for path in bucket_paths)
+    return sample_paths(all_paths, settings.data.truefake_social_max_fake, settings.train.seed)
+
+
 def build_metadata_index(settings: Settings) -> pd.DataFrame:
     records: list[SampleRecord] = []
     specs = [
-        ("train", "corvi_latent_diffusion", 1.0, settings.paths.corvi_dir),
-        ("train", "coco_train2017", 0.0, settings.paths.coco_train_dir),
+        (
+            "train",
+            "corvi_latent_diffusion",
+            1.0,
+            settings.paths.corvi_dir,
+            settings.data.official_max_train_fake,
+        ),
+        (
+            "train",
+            "coco_train2017",
+            0.0,
+            settings.paths.coco_train_dir,
+            settings.data.official_max_train_real,
+        ),
+    ]
+    for split, source, label, root, cap in specs:
+        paths = sample_paths(iter_images(root), cap, settings.train.seed)
+        append_records(records, paths=paths, split=split, source=source, label=label)
+
+    truefake_root = settings.paths.truefake_social_dir
+    if truefake_root is not None:
+        real_paths = sample_paths(
+            truefake_social_real_paths(truefake_root),
+            settings.data.truefake_social_max_real,
+            settings.train.seed,
+        )
+        append_records(
+            records,
+            paths=real_paths,
+            split="train",
+            source="truefake_social_real",
+            label=0.0,
+            image_id_root=truefake_root,
+        )
+        fake_paths = truefake_social_fake_paths(settings, truefake_root)
+        append_records(
+            records,
+            paths=fake_paths,
+            split="train",
+            source="truefake_social_fake",
+            label=1.0,
+            image_id_root=truefake_root,
+        )
+
+    heldout_specs = [
         ("val", "itw_real", 0.0, settings.paths.val_real_dir),
         ("val", "itw_fake", 1.0, settings.paths.val_fake_dir),
         ("test", "taska_test", None, settings.paths.test_dir),
     ]
-    for split, source, label, root in specs:
-        paths = iter_images(root)
-        console.print(f"Indexing {len(paths)} images from {root}")
-        for path in paths:
-            width, height, image_format = read_image_metadata(path)
-            records.append(
-                SampleRecord(
-                    image_id=path.name,
-                    image_path=str(path.resolve()),
-                    label=label,
-                    split=split,
-                    source_dataset=source,
-                    width=width,
-                    height=height,
-                    file_format=image_format,
-                )
-            )
+    for split, source, label, root in heldout_specs:
+        append_records(records, paths=iter_images(root), split=split, source=source, label=label)
 
     frame = pd.DataFrame([record.__dict__ for record in records])
     return frame

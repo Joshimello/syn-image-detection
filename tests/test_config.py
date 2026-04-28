@@ -35,3 +35,19 @@ def test_load_settings_prefers_existing_config_relative_path(tmp_path: Path) -> 
     settings = load_settings(config_path)
 
     assert settings.paths.corvi_dir == (tmp_path / "data/raw/corvi").resolve()
+
+
+def test_open_run_submission_path_uses_run_type(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        """
+outputs:
+  team_name: teamname
+  run_type: open
+""".strip(),
+        encoding="utf-8",
+    )
+
+    settings = load_settings(config_path, run_name_override="open_smoke")
+
+    assert settings.submission_path().name == "teamname_open.csv"
