@@ -32,10 +32,10 @@ model:
   dropout: 0.5
 
 train:
-  run_name: constrained_clip_l14_unfreeze_last2_smallimg_moredata_epochs3
+  run_name: constrained_clip_l14_unfreeze_last2_smallimg_moredata
   seed: 1337
   device: cuda
-  epochs: 3
+  epochs: 2
   learning_rate: 0.0003
   head_learning_rate: 0.0003
   backbone_learning_rate: 0.00001

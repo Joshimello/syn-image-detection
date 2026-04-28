@@ -57,9 +57,17 @@ def predict_loader(
     heights: list[int] = []
     logits_list: list[np.ndarray] = []
     for images, batch_labels, batch_image_ids, batch_widths, batch_heights in loader:
+        crop_count = 1
+        if images.ndim == 5:
+            batch_size, crop_count, channels, height, width = images.shape
+            images = images.view(batch_size * crop_count, channels, height, width)
+        else:
+            batch_size = images.shape[0]
         images = images.to(device, non_blocking=True)
         with torch.autocast(device_type=device.type, enabled=amp and device.type == "cuda"):
             logits = model(images)
+        if crop_count > 1:
+            logits = logits.view(batch_size, crop_count).mean(dim=1)
         logits_np = logits.detach().cpu().float().numpy()
         logits_list.append(logits_np)
         image_ids.extend(list(batch_image_ids))

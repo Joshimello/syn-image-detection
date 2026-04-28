@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import math
 import random
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -10,7 +11,7 @@ import pandas as pd
 import torch
 from PIL import Image
 from rich.console import Console
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, Sampler, WeightedRandomSampler
 from torchvision.transforms import ColorJitter, RandomCrop
 from torchvision.transforms import functional as TF
 from torchvision.transforms.functional import InterpolationMode
@@ -142,6 +143,11 @@ class TrainTransform:
         self.color_jitter_probability = data.color_jitter_probability
         self.rotation_probability = data.rotation_probability
         self.rotation_degrees = data.rotation_degrees
+        self.patch_mask_probability = data.patch_mask_probability
+        self.patch_mask_scale_min = data.patch_mask_scale_min
+        self.patch_mask_scale_max = data.patch_mask_scale_max
+        self.patch_mask_ratio_min = data.patch_mask_ratio_min
+        self.patch_mask_ratio_max = data.patch_mask_ratio_max
         self.jpeg = RandomJPEGCompression(
             probability=data.train_jpeg_probability,
             quality_min=data.train_jpeg_quality_min,
@@ -167,18 +173,35 @@ class TrainTransform:
             image = TF.rotate(image, angle, interpolation=InterpolationMode.BILINEAR)
         image = self.jpeg(image)
         image = self.resize_degrade(image)
-        return normalize_clip(image)
+        tensor = normalize_clip(image)
+        if random.random() < self.patch_mask_probability:
+            tensor = apply_random_erasing(
+                tensor,
+                scale_min=self.patch_mask_scale_min,
+                scale_max=self.patch_mask_scale_max,
+                ratio_min=self.patch_mask_ratio_min,
+                ratio_max=self.patch_mask_ratio_max,
+            )
+        return tensor
 
 
 class EvalTransform:
     def __init__(self, settings: Settings) -> None:
         self.resize_min_short_side = settings.data.resize_min_short_side
         self.input_size = settings.data.input_size
+        self.num_crops = settings.eval.num_crops
 
     def __call__(self, image: Image.Image) -> torch.Tensor:
         image = ensure_min_short_side(image, self.resize_min_short_side)
-        image = TF.center_crop(image, [self.input_size, self.input_size])
-        return normalize_clip(image)
+        if self.num_crops <= 1:
+            image = TF.center_crop(image, [self.input_size, self.input_size])
+            return normalize_clip(image)
+        crops = generate_eval_crops(
+            image=image,
+            input_size=self.input_size,
+            num_crops=self.num_crops,
+        )
+        return torch.stack([normalize_clip(crop) for crop in crops], dim=0)
 
 
 def ensure_min_short_side(image: Image.Image, min_short_side: int) -> Image.Image:
@@ -191,6 +214,41 @@ def ensure_min_short_side(image: Image.Image, min_short_side: int) -> Image.Imag
 def normalize_clip(image: Image.Image) -> torch.Tensor:
     tensor = TF.to_tensor(image)
     return TF.normalize(tensor, mean=CLIP_MEAN, std=CLIP_STD)
+
+
+def apply_random_erasing(
+    tensor: torch.Tensor,
+    scale_min: float,
+    scale_max: float,
+    ratio_min: float,
+    ratio_max: float,
+) -> torch.Tensor:
+    channels, height, width = tensor.shape
+    area = height * width
+    target_area = random.uniform(scale_min, scale_max) * area
+    aspect_ratio = random.uniform(ratio_min, ratio_max)
+    erase_h = min(height, max(1, int(round(math.sqrt(target_area * aspect_ratio)))))
+    erase_w = min(width, max(1, int(round(math.sqrt(target_area / aspect_ratio)))))
+    top = random.randint(0, max(height - erase_h, 0))
+    left = random.randint(0, max(width - erase_w, 0))
+    tensor = tensor.clone()
+    tensor[:, top : top + erase_h, left : left + erase_w] = 0.0
+    return tensor
+
+
+def generate_eval_crops(image: Image.Image, input_size: int, num_crops: int) -> list[Image.Image]:
+    width, height = image.size
+    crop_w = min(input_size, width)
+    crop_h = min(input_size, height)
+    if num_crops >= 5:
+        return [crop.copy() for crop in TF.five_crop(image, [crop_h, crop_w])]
+    if width >= height:
+        offsets = [0, max((width - crop_w) // 2, 0), max(width - crop_w, 0)]
+        top = max((height - crop_h) // 2, 0)
+        return [TF.crop(image, top, left, crop_h, crop_w) for left in offsets]
+    offsets = [0, max((height - crop_h) // 2, 0), max(height - crop_h, 0)]
+    left = max((width - crop_w) // 2, 0)
+    return [TF.crop(image, top, left, crop_h, crop_w) for top in offsets]
 
 
 class SyntheticImageDataset(Dataset[tuple[torch.Tensor, torch.Tensor, str, int, int]]):
@@ -226,13 +284,15 @@ def make_loader(
     shuffle: bool,
     drop_last: bool,
     pil_transform: Callable[[Image.Image], Image.Image] | None = None,
+    sampler: Sampler[int] | None = None,
 ) -> DataLoader[tuple[torch.Tensor, torch.Tensor, list[str], torch.Tensor, torch.Tensor]]:
     dataset = SyntheticImageDataset(frame=frame, transform=transform, pil_transform=pil_transform)
     workers = settings.data.num_workers
     return DataLoader(
         dataset,
         batch_size=settings.data.batch_size,
-        shuffle=shuffle,
+        shuffle=shuffle if sampler is None else False,
+        sampler=sampler,
         drop_last=drop_last,
         num_workers=workers,
         pin_memory=settings.data.pin_memory,
@@ -276,3 +336,25 @@ def laundering_transform(image: Image.Image) -> Image.Image:
     image = TF.center_crop(image, [crop_h, crop_w])
     image = image.resize((width, height), Image.Resampling.BICUBIC)
     return image
+
+
+def build_train_sampler(frame: pd.DataFrame, settings: Settings) -> Sampler[int] | None:
+    threshold = settings.data.small_image_oversample_threshold
+    factor = settings.data.small_image_oversample_factor
+    if threshold is None or factor <= 1.0:
+        return None
+
+    weights = pd.Series(1.0, index=frame.index, dtype=float)
+    short_side = frame[["width", "height"]].min(axis=1)
+    for _label, subset in frame.groupby("label"):
+        label_weights = pd.Series(1.0, index=subset.index, dtype=float)
+        small_mask = short_side.loc[subset.index] < threshold
+        label_weights.loc[small_mask] *= factor
+        label_weights *= len(subset) / label_weights.sum()
+        weights.loc[subset.index] = label_weights
+
+    return WeightedRandomSampler(
+        weights=torch.as_tensor(weights.to_numpy(), dtype=torch.double),
+        num_samples=len(frame),
+        replacement=True,
+    )

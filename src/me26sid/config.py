@@ -25,6 +25,14 @@ class DataConfig(BaseModel):
     resize_min_short_side: int = 256
     max_train_real: int | None = 50_000
     max_train_fake: int | None = 50_000
+    small_image_oversample_threshold: int | None = None
+    small_image_oversample_factor: float = 1.0
+    patch_mask_probability: float = 0.0
+    patch_mask_mode: str = "random_erasing"
+    patch_mask_scale_min: float = 0.02
+    patch_mask_scale_max: float = 0.10
+    patch_mask_ratio_min: float = 0.3
+    patch_mask_ratio_max: float = 3.3
     train_jpeg_probability: float = 0.5
     train_jpeg_quality_min: int = 60
     train_jpeg_quality_max: int = 100
@@ -55,15 +63,20 @@ class TrainConfig(BaseModel):
     device: str = "cuda"
     epochs: int = 5
     learning_rate: float = 1e-3
+    head_learning_rate: float | None = None
+    backbone_learning_rate: float | None = None
     weight_decay: float = 1e-4
     amp: bool = True
     grad_accum_steps: int = 1
+    unfreeze_last_n_blocks: int = 0
+    gradient_clip_norm: float | None = None
     early_stopping_patience: int = 2
     log_every_steps: int = 50
 
 
 class EvalConfig(BaseModel):
     threshold_grid_size: int = 1001
+    num_crops: int = 1
     jpeg_qualities: list[int] = Field(default_factory=lambda: [95, 85, 75])
     size_bucket_edges: list[int] = Field(default_factory=lambda: [512, 1024])
 
@@ -94,6 +107,9 @@ class Settings(BaseModel):
 
     def threshold_path(self) -> Path:
         return self.run_dir() / "threshold.json"
+
+    def calibration_path(self) -> Path:
+        return self.run_dir() / "calibration.json"
 
     def robustness_path(self) -> Path:
         return self.run_dir() / "robustness.json"

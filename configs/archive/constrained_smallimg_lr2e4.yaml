@@ -11,8 +11,8 @@ paths:
 data:
   input_size: 224
   resize_min_short_side: 256
-  max_train_real: 75000
-  max_train_fake: 75000
+  max_train_real: 50000
+  max_train_fake: 50000
   small_image_oversample_threshold: 512
   small_image_oversample_factor: 1.25
   train_jpeg_probability: 0.5
@@ -32,18 +32,14 @@ model:
   dropout: 0.5
 
 train:
-  run_name: constrained_clip_l14_unfreeze_last2_smallimg_moredata_epochs3
+  run_name: constrained_clip_l14_smallimg_lr2e4
   seed: 1337
   device: cuda
   epochs: 3
-  learning_rate: 0.0003
-  head_learning_rate: 0.0003
-  backbone_learning_rate: 0.00001
+  learning_rate: 0.0002
   weight_decay: 0.0001
   amp: true
   grad_accum_steps: 1
-  unfreeze_last_n_blocks: 2
-  gradient_clip_norm: 1.0
   early_stopping_patience: 1
   log_every_steps: 50
 

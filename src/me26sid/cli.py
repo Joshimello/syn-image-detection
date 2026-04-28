@@ -5,6 +5,8 @@ import sys
 from pathlib import Path
 
 from me26sid.calibrate import calibrate_main
+from me26sid.compare import compare_runs_main
+from me26sid.ensemble import ensemble_main
 from me26sid.eval import eval_main
 from me26sid.predict import export_submission_main
 from me26sid.train import inspect_data_main, train_main
@@ -15,6 +17,8 @@ SCRIPT_TO_COMMAND = {
     "me26sid-calibrate": "calibrate",
     "me26sid-export-submission": "export-submission",
     "me26sid-inspect-data": "inspect-data",
+    "me26sid-compare-runs": "compare-runs",
+    "me26sid-ensemble": "ensemble",
 }
 
 
@@ -22,10 +26,20 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="me26sid")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    for command in ("inspect-data", "train", "eval", "calibrate", "export-submission"):
+    commands = (
+        "inspect-data",
+        "train",
+        "eval",
+        "calibrate",
+        "export-submission",
+        "compare-runs",
+        "ensemble",
+    )
+    for command in commands:
         subparser = subparsers.add_parser(command)
-        subparser.add_argument("--config", type=Path, required=True)
-        subparser.add_argument("--run-name", type=str)
+        if command != "compare-runs":
+            subparser.add_argument("--config", type=Path, required=True)
+            subparser.add_argument("--run-name", type=str)
         if command == "eval":
             subparser.add_argument("--checkpoint", type=Path)
         elif command == "calibrate":
@@ -34,6 +48,13 @@ def build_parser() -> argparse.ArgumentParser:
             subparser.add_argument("--checkpoint", type=Path)
             subparser.add_argument("--threshold", type=Path)
             subparser.add_argument("--output", type=Path)
+        elif command == "ensemble":
+            subparser.add_argument(
+                "--source-run",
+                action="append",
+                required=True,
+                help="Source run name or path. Repeat for multi-run ensembles.",
+            )
 
     return parser
 
@@ -51,6 +72,8 @@ def main() -> None:
         inspect_data_main(args.config, run_name_override=args.run_name)
     elif args.command == "train":
         train_main(args.config, run_name_override=args.run_name)
+    elif args.command == "compare-runs":
+        compare_runs_main()
     elif args.command == "eval":
         eval_main(
             args.config,
@@ -69,6 +92,12 @@ def main() -> None:
             checkpoint_override=args.checkpoint,
             threshold_override=args.threshold,
             output_override=args.output,
+            run_name_override=args.run_name,
+        )
+    elif args.command == "ensemble":
+        ensemble_main(
+            args.config,
+            source_runs=args.source_run,
             run_name_override=args.run_name,
         )
     else:  # pragma: no cover

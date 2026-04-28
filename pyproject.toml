@@ -41,6 +41,8 @@ me26sid-eval = "me26sid.cli:main"
 me26sid-calibrate = "me26sid.cli:main"
 me26sid-export-submission = "me26sid.cli:main"
 me26sid-inspect-data = "me26sid.cli:main"
+me26sid-compare-runs = "me26sid.cli:main"
+me26sid-ensemble = "me26sid.cli:main"
 
 [[tool.uv.index]]
 name = "pytorch-cu128"

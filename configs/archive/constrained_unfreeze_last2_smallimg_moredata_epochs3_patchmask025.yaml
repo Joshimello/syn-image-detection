@@ -15,6 +15,12 @@ data:
   max_train_fake: 75000
   small_image_oversample_threshold: 512
   small_image_oversample_factor: 1.25
+  patch_mask_probability: 0.025
+  patch_mask_mode: random_erasing
+  patch_mask_scale_min: 0.02
+  patch_mask_scale_max: 0.08
+  patch_mask_ratio_min: 0.3
+  patch_mask_ratio_max: 3.3
   train_jpeg_probability: 0.5
   train_jpeg_quality_min: 50
   train_jpeg_quality_max: 100
@@ -32,7 +38,7 @@ model:
   dropout: 0.5
 
 train:
-  run_name: constrained_clip_l14_unfreeze_last2_smallimg_moredata_epochs3
+  run_name: constrained_clip_l14_unfreeze_last2_smallimg_moredata_epochs3_patchmask025
   seed: 1337
   device: cuda
   epochs: 3

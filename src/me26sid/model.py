@@ -18,8 +18,6 @@ class CLIPIntermediateEncoder(nn.Module):
         super().__init__()
         self.clip = self._create_model(config)
         self.clip.eval()
-        for parameter in self.clip.parameters():
-            parameter.requires_grad = False
 
         visual = getattr(self.clip, "visual", None)
         if visual is None or not hasattr(visual, "transformer") or not hasattr(
@@ -30,6 +28,8 @@ class CLIPIntermediateEncoder(nn.Module):
         self.resblocks: Sequence[nn.Module] = list(visual.transformer.resblocks)
         self.num_blocks = len(self.resblocks)
         self.feature_dim = int(visual.transformer.width)
+        self.visual = visual
+        self.set_trainable_blocks(0)
 
     def _create_model(self, config: ModelConfig) -> nn.Module:
         try:
@@ -85,6 +85,23 @@ class CLIPIntermediateEncoder(nn.Module):
 
         return hook
 
+    def set_trainable_blocks(self, count: int) -> None:
+        for parameter in self.clip.parameters():
+            parameter.requires_grad = False
+        if count <= 0:
+            return
+        for block in self.resblocks[-count:]:
+            for parameter in block.parameters():
+                parameter.requires_grad = True
+        if hasattr(self.visual, "ln_post"):
+            for parameter in self.visual.ln_post.parameters():
+                parameter.requires_grad = True
+        if hasattr(self.visual, "proj") and isinstance(self.visual.proj, torch.nn.Parameter):
+            self.visual.proj.requires_grad = True
+
+    def trainable_parameters(self):
+        return [parameter for parameter in self.clip.parameters() if parameter.requires_grad]
+
 
 class IntermediateFusionHead(nn.Module):
     def __init__(self, num_blocks: int, feature_dim: int, config: ModelConfig) -> None:
@@ -112,19 +129,27 @@ class IntermediateFusionHead(nn.Module):
 
 
 class SyntheticImageDetector(nn.Module):
-    def __init__(self, config: ModelConfig) -> None:
+    def __init__(self, config: ModelConfig, unfreeze_last_n_blocks: int = 0) -> None:
         super().__init__()
         self.encoder = CLIPIntermediateEncoder(config)
+        self.encoder.set_trainable_blocks(unfreeze_last_n_blocks)
         self.head = IntermediateFusionHead(
             num_blocks=self.encoder.num_blocks,
             feature_dim=self.encoder.feature_dim,
             config=config,
         )
+        self.encoder_frozen = unfreeze_last_n_blocks <= 0
 
     def forward(self, images: torch.Tensor) -> torch.Tensor:
-        with torch.no_grad():
+        if self.encoder_frozen:
+            with torch.no_grad():
+                block_features = self.encoder(images)
+        else:
             block_features = self.encoder(images)
         return self.head(block_features)
 
-    def trainable_parameters(self):
+    def head_parameters(self):
         return self.head.parameters()
+
+    def backbone_parameters(self):
+        return self.encoder.trainable_parameters()

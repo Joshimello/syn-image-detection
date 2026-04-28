@@ -9,6 +9,7 @@ import pandas as pd
 import torch
 from rich.console import Console
 from torch import nn
+from torch.nn.utils import clip_grad_norm_
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
 
@@ -17,6 +18,7 @@ from me26sid.data import (
     EvalTransform,
     TrainTransform,
     build_and_save_index,
+    build_train_sampler,
     inspect_counts,
     load_metadata_index,
     make_loader,
@@ -110,6 +112,9 @@ def train_one_epoch(
             loss = criterion(logits, labels) / settings.train.grad_accum_steps
         scaler.scale(loss).backward()
         if step % settings.train.grad_accum_steps == 0:
+            if settings.train.gradient_clip_norm is not None:
+                scaler.unscale_(optimizer)
+                clip_grad_norm_(model.parameters(), settings.train.gradient_clip_norm)
             scaler.step(optimizer)
             scaler.update()
             optimizer.zero_grad(set_to_none=True)
@@ -187,6 +192,7 @@ def train_main(config_path: Path, run_name_override: str | None = None) -> None:
         settings=settings,
         shuffle=True,
         drop_last=False,
+        sampler=build_train_sampler(train_frame, settings),
     )
     val_loader = make_loader(
         frame=val_frame,
@@ -196,12 +202,28 @@ def train_main(config_path: Path, run_name_override: str | None = None) -> None:
         drop_last=False,
     )
 
-    model = SyntheticImageDetector(settings.model).to(device)
-    optimizer = AdamW(
-        model.trainable_parameters(),
-        lr=settings.train.learning_rate,
-        weight_decay=settings.train.weight_decay,
-    )
+    model = SyntheticImageDetector(
+        settings.model,
+        unfreeze_last_n_blocks=settings.train.unfreeze_last_n_blocks,
+    ).to(device)
+    head_lr = settings.train.head_learning_rate or settings.train.learning_rate
+    parameter_groups: list[dict[str, Any]] = [
+        {
+            "params": list(model.head_parameters()),
+            "lr": head_lr,
+            "weight_decay": settings.train.weight_decay,
+        }
+    ]
+    backbone_params = list(model.backbone_parameters())
+    if backbone_params:
+        parameter_groups.append(
+            {
+                "params": backbone_params,
+                "lr": settings.train.backbone_learning_rate or settings.train.learning_rate,
+                "weight_decay": settings.train.weight_decay,
+            }
+        )
+    optimizer = AdamW(parameter_groups)
     scaler = torch.amp.GradScaler(enabled=settings.train.amp and device.type == "cuda")
 
     best_auc = float("-inf")
