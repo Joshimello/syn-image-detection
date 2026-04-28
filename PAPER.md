@@ -5,12 +5,13 @@
 ### Task Setting
 
 We address Task A of the MediaEval 2026 Synthetic Image Detection challenge in
-the constrained setting. The goal is to classify each image as real or
-synthetic and to produce a submission CSV containing the image filename, the
+both constrained and open settings. The goal is to classify each image as real
+or synthetic and to produce a submission CSV containing the image filename, the
 probability of being synthetic, a binary label, and a single global decision
-threshold. We use only the official constrained training data available locally:
-Corvi latent-diffusion synthetic images and COCO real images. The ITW-SM
-validation set is used for model selection, calibration, and robustness
+threshold. The constrained run uses only the official training data available
+locally: Corvi latent-diffusion synthetic images and COCO real images. The open
+run adds TrueFake social-media images from Facebook, Telegram, and Twitter. The
+ITW-SM validation set is used for model selection, calibration, and robustness
 analysis.
 
 ### Data Preparation
@@ -19,8 +20,11 @@ We build a metadata index over the train, validation, and test image folders.
 Each record stores the filename, absolute path, split, source dataset, label
 when available, image dimensions, and file format. For the final constrained
 run, we sample up to 75,000 real training images and 75,000 synthetic training
-images using a fixed random seed. The validation set is kept unchanged and is
-used only for evaluation and threshold selection.
+images using a fixed random seed. For the open run, we keep this 75k+75k
+official subset and add 60,000 TrueFake social real images plus 60,000 TrueFake
+social fake images. The fake social subset is sampled evenly across platform
+and generator family: 2,500 images from each of 24 buckets. The validation set
+is kept unchanged and is used only for evaluation and threshold selection.
 
 Training images are resized so the short side is at least 256 pixels, then a
 224x224 crop is sampled. We apply standard CLIP normalization and use moderate
@@ -94,10 +98,11 @@ F1. This was important because the strongest models produced highly saturated
 scores and useful thresholds were much smaller than those found by a coarse
 linear sweep over `[0, 1]`.
 
-For the final pinned run, the selected global threshold is
-`0.0001303297467529`. Test predictions are exported with this same threshold
-repeated in every row. The final constrained submission file contains 10,000
-rows, one for each challenge test image, and uses bare filenames as `image_id`.
+For the final pinned constrained run, the selected global threshold is
+`0.0001303297467529`. For the pinned open run, the selected global threshold is
+`0.001220795209519565`. Test predictions are exported with the corresponding
+threshold repeated in every row. Each submission file contains 10,000 rows, one
+for each challenge test image, and uses bare filenames as `image_id`.
 
 ## Experiments
 
@@ -112,7 +117,7 @@ simulates resizing and recropping.
 
 ### Main Results
 
-The final pinned model is:
+The final pinned constrained model is:
 
 `constrained_clip_l14_unfreeze_last2_smallimg_moredata_epochs3_20260424_204835`
 
@@ -120,17 +125,32 @@ It uses 75k real plus 75k synthetic training samples, small-image oversampling,
 partial unfreezing of the last two CLIP visual blocks, and three training
 epochs.
 
+The final pinned open model is:
+
+`open_clip_l14_unfreeze_last2_smallimg_truefake_social_135k_epochs3_20260428_121207`
+
+It uses the same architecture and training recipe, but trains on 135k real plus
+135k synthetic samples by adding the stratified TrueFake social subset.
+
 | Run                              | Key change                              | Accuracy |     F1 | ROC AUC |     AP |
 | -------------------------------- | --------------------------------------- | -------: | -----: | ------: | -----: |
 | Frozen CLIP small-image baseline | Best frozen-backbone recipe             |   0.6991 | 0.7335 |  0.7796 | 0.7667 |
 | Logit ensemble                   | Ensemble of more-data and unfreeze runs |   0.6993 | 0.7425 |  0.7918 | 0.7797 |
 | Unfreeze last two blocks         | 75k+75k, two epochs                     |   0.7116 | 0.7533 |  0.8074 | 0.7928 |
-| Final pinned model               | 75k+75k, three epochs                   |   0.7318 | 0.7555 |  0.8114 | 0.7963 |
+| Final constrained model          | 75k+75k, three epochs                   |   0.7318 | 0.7555 |  0.8114 | 0.7963 |
 | Patchmask backup                 | Mild patch masking, two epochs          |   0.7311 | 0.7553 |  0.8099 | 0.7955 |
+| Final open model                 | +60k+60k TrueFake social                |   0.7640 | 0.7916 |  0.8643 | 0.8541 |
 
-The final model improved substantially over the best frozen-backbone baseline:
+The final constrained model improved substantially over the best
+frozen-backbone baseline:
 F1 increased from `0.7335` to `0.7555`, ROC AUC from `0.7796` to `0.8114`, and
 average precision from `0.7667` to `0.7963`.
+
+The open model further improved over the final constrained model: F1 increased
+from `0.7555` to `0.7916`, ROC AUC from `0.8114` to `0.8643`, and average
+precision from `0.7963` to `0.8541`. The largest operating-point shift was
+recall, which increased from `0.8288` to `0.8964` while precision also improved
+slightly from `0.6941` to `0.7087`.
 
 ### Ablation Findings
 
@@ -145,34 +165,44 @@ suggests that simply adding more constrained data was less important than
 matching the in-the-wild validation distribution through the right training
 recipe.
 
-Patch masking helped small-image robustness but did not beat the final pinned
-model overall. The strongest patchmask backup reached nearly the same F1
-(`0.7553`) and had better performance on the `<512` bucket, but its ROC AUC and
-average precision were slightly lower than the selected model.
+Patch masking helped small-image robustness but did not beat the final
+constrained model overall. The strongest patchmask backup reached nearly the
+same F1 (`0.7553`) and had better performance on the `<512` bucket, but its
+ROC AUC and average precision were slightly lower than the selected model.
 
 Multi-crop inference was tested earlier but was not retained. It improved some
 small-image behavior but reduced the overall validation ranking and robustness
 metrics.
 
+Adding TrueFake social data was the strongest open-run improvement. Unlike the
+failed constrained 100k+100k expansion, this added data changed the source
+distribution rather than only increasing sample count. The benefit appears most
+clearly in recall and small-image robustness, suggesting better coverage of
+social-media style artifacts.
+
 ### Robustness Results
 
-| Run                   | `<512` F1 | Laundering ROC AUC | JPEG85 ROC AUC |
-| --------------------- | --------: | -----------------: | -------------: |
-| Final pinned model    |    0.5833 |             0.7826 |         0.7716 |
-| Patchmask backup      |    0.6126 |             0.7838 |         0.7670 |
-| Three-epoch patchmask |    0.6261 |             0.7735 |         0.7662 |
-| Seed 2025 variant     |    0.5766 |             0.7818 |         0.7735 |
-| Two-epoch predecessor |    0.5818 |             0.7773 |         0.7728 |
+| Run                     | `<512` F1 | Laundering ROC AUC | JPEG85 ROC AUC |
+| ----------------------- | --------: | -----------------: | -------------: |
+| Final open model        |    0.7156 |             0.8212 |         0.8385 |
+| Final constrained model |    0.5833 |             0.7826 |         0.7716 |
+| Patchmask backup        |    0.6126 |             0.7838 |         0.7670 |
+| Three-epoch patchmask   |    0.6261 |             0.7735 |         0.7662 |
+| Seed 2025 variant       |    0.5766 |             0.7818 |         0.7735 |
+| Two-epoch predecessor   |    0.5818 |             0.7773 |         0.7728 |
 
-The final pinned model gives the best overall validation metrics, while the
-patchmask variants remain useful robustness references. The main remaining
-weakness is the `<512` image bucket, where patch masking improves F1 but costs
-some overall ranking performance.
+The final open model gives the best overall validation and robustness metrics.
+It improves the `<512` image bucket from `0.5833` to `0.7156` F1 relative to
+the final constrained model, while also improving laundering ROC AUC and JPEG85
+ROC AUC. Among constrained-only runs, the patchmask variants remain useful
+robustness references.
 
 ### Final Submission
 
-The final constrained submission is generated from the pinned checkpoint and
-uses the calibrated threshold `0.0001303297467529`. The exported CSV was
-validated to contain exactly 10,000 rows, no duplicate image IDs, no missing
-test filenames, probabilities in `[0, 1]`, binary labels, and labels consistent
-with `prob >= threshold`.
+The final constrained submission is generated from the pinned constrained
+checkpoint and uses the calibrated threshold `0.0001303297467529`. The final
+open submission is generated from the pinned open checkpoint and uses the
+calibrated threshold `0.001220795209519565`. Both exported CSVs were validated
+to contain exactly 10,000 rows, no duplicate image IDs, no missing test
+filenames, probabilities in `[0, 1]`, binary labels, and labels consistent with
+`prob >= threshold`.
