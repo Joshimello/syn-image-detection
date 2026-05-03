@@ -7,15 +7,15 @@ if [[ "${1:-}" == "--include-optional" ]]; then
 fi
 
 CONFIGS=(
-  "configs/constrained_unfreeze_last2_smallimg_moredata_seed2024.yaml"
-  "configs/constrained_unfreeze_last2_smallimg_moredata_epochs3.yaml"
-  "configs/constrained_unfreeze_last2_smallimg_moredata_100k.yaml"
-  "configs/constrained_unfreeze_last2_smallimg_moredata_backbone5e6.yaml"
-  "configs/constrained_unfreeze_last2_smallimg_moredata_patchmask05.yaml"
+  "configs/archive/constrained_unfreeze_last2_smallimg_moredata_seed2024.yaml"
+  "configs/archive/constrained_unfreeze_last2_smallimg_moredata_epochs3.yaml"
+  "configs/archive/constrained_unfreeze_last2_smallimg_moredata_100k.yaml"
+  "configs/archive/constrained_unfreeze_last2_smallimg_moredata_backbone5e6.yaml"
+  "configs/archive/constrained_unfreeze_last2_smallimg_moredata_patchmask05.yaml"
 )
 
 if [[ "${INCLUDE_OPTIONAL}" == "1" ]]; then
-  CONFIGS+=("configs/constrained_unfreeze_last2_smallimg_moredata_head2e4.yaml")
+  CONFIGS+=("configs/archive/constrained_unfreeze_last2_smallimg_moredata_head2e4.yaml")
 fi
 
 echo "Running next optimization batch"

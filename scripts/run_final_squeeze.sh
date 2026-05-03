@@ -2,11 +2,11 @@
 set -euo pipefail
 
 CONFIGS=(
-  "configs/constrained_unfreeze_last2_smallimg_moredata_epochs3_patchmask025.yaml"
-  "configs/constrained_unfreeze_last2_smallimg_moredata_epochs3_patchmask05.yaml"
-  "configs/constrained_unfreeze_last2_smallimg_moredata_epochs3_backbone5e6.yaml"
-  "configs/constrained_unfreeze_last2_smallimg_moredata_epochs3_seed2025.yaml"
-  "configs/constrained_unfreeze_last2_smallimg_moredata_epochs3_seed7.yaml"
+  "configs/archive/constrained_unfreeze_last2_smallimg_moredata_epochs3_patchmask025.yaml"
+  "configs/archive/constrained_unfreeze_last2_smallimg_moredata_epochs3_patchmask05.yaml"
+  "configs/archive/constrained_unfreeze_last2_smallimg_moredata_epochs3_backbone5e6.yaml"
+  "configs/archive/constrained_unfreeze_last2_smallimg_moredata_epochs3_seed2025.yaml"
+  "configs/archive/constrained_unfreeze_last2_smallimg_moredata_epochs3_seed7.yaml"
 )
 
 echo "Running final squeeze batch"
