@@ -8,7 +8,7 @@
 
 ## Abstract
 
-Synthetic image detection aims to determine whether an image is real or generated. We study a CLIP-based detector for MediaEval 2026 Synthetic Image Detection Task A that uses layer-wise visual representations from a pretrained ViT-L/14 image encoder. Inspired by prior work on intermediate CLIP representations for synthetic image detection, the detector learns to fuse class-token features from all visual transformer blocks instead of relying only on the final encoder embedding. The system is evaluated in two training regimes: a constrained setting using COCO real images and Corvi synthetic images, and an open-data setting that additionally includes TrueFake social images. On a local in-the-wild validation split, the constrained model achieves F1 0.7555, ROC AUC 0.8114, and average precision 0.7963. The open-data model improves to F1 0.7916, ROC AUC 0.8643, and average precision 0.8541. These results suggest that intermediate CLIP features provide a practical representation for synthetic image detection, while broader training data improves robustness to social-media-style imagery.
+Synthetic image detection aims to determine whether an image is real or generated. We study a CLIP-based detector for MediaEval 2026 Synthetic Image Detection Task A that uses layer-wise visual representations from a pretrained ViT-L/14 image encoder. Inspired by prior work on intermediate CLIP representations for synthetic image detection, the detector learns to fuse class-token features from all visual transformer blocks instead of relying only on the final encoder embedding. The system is evaluated in two training regimes: a constrained setting using COCO real images and Corvi synthetic images, and an open-data setting that additionally includes TrueFake social images. On a local in-the-wild validation split, the constrained model achieves F1 0.7555, ROC AUC 0.8114, and average precision 0.7963. The open-data model improves to F1 0.7916, ROC AUC 0.8643, and average precision 0.8541. On the official challenge evaluation, the constrained run obtains F1 0.7013, ROC AUC 0.7589, and average precision 0.7665, while the open-data run obtains F1 0.7150, ROC AUC 0.7686, and average precision 0.7607. These results suggest that intermediate CLIP features provide a practical representation for synthetic image detection, while broader training data improves thresholded detection performance on both local and official evaluations.
 
 ![Teaser overview of the layer-wise CLIP feature-fusion detector.](teaser_detection_overview.png)
 
@@ -101,7 +101,7 @@ The constrained regime uses COCO train2017 images as real examples and Corvi lat
 
 The open-data regime uses the constrained data and adds TrueFake social images. The resulting local metadata index contains 135,000 real and 135,000 synthetic training images: 75,000 COCO real, 75,000 Corvi synthetic, 60,000 TrueFake social real, and 60,000 TrueFake social synthetic images.
 
-Both regimes use the same local validation and test splits. The validation split contains 5,000 real and 5,000 synthetic in-the-wild images. The test split contains 10,000 unlabeled images. Since official hidden test labels are not available in the repository, all reported metrics are local validation results.
+Both regimes use the same local validation and test splits. The validation split contains 5,000 real and 5,000 synthetic in-the-wild images. The local test split contains 10,000 unlabeled images. We report local validation metrics as development results and official challenge evaluation metrics from the provided evaluation artifacts. The official evaluation contains 10,000 labeled images, balanced between 5,000 real and 5,000 synthetic examples.
 
 ![Figure 4. Qualitative examples from the local validation split. The top row shows real examples with green borders, and the bottom row shows synthetic examples with red borders. Images are center-cropped for display only; the model evaluation uses the preprocessing described in the experimental setup.](figure4_qualitative_examples.png)
 
@@ -132,7 +132,7 @@ Table 1 reports local validation performance for the constrained and open-data r
 | Constrained | 75k COCO real + 75k Corvi synthetic                                    |  0.000130 |   0.7318 |    0.6941 | 0.8288 | 0.7555 |  0.8114 | 0.7963 |
 | Open data   | Constrained + 60k TrueFake social real + 60k TrueFake social synthetic |  0.001221 |   0.7640 |    0.7087 | 0.8964 | 0.7916 |  0.8643 | 0.8541 |
 
-**Table 1.** Local validation results. AP denotes average precision. These are not official hidden-test results.
+**Table 1.** Local validation results. AP denotes average precision. These are not official challenge results.
 
 The open-data run improves F1 by 0.0361 and ROC AUC by 0.0530 over the constrained run. The largest absolute gain appears in recall, increasing from 0.8288 to 0.8964, suggesting that the additional social-media training data helps the model identify more synthetic images at the selected threshold.
 
@@ -149,19 +149,34 @@ Table 2 summarizes selected robustness checks. The open-data model is consistent
 
 The constrained model is particularly weak on images whose shorter side is below 512 pixels. The open-data model substantially improves this bucket, but small and post-processed images remain plausible failure cases.
 
+### 4.3 Official Challenge Results
+
+Table 3 reports the official challenge evaluation results for the submitted constrained and open-data runs. These results are lower than the local validation metrics, indicating a distribution shift between the development split and the official evaluation data. The open-data run has the best official F1 and ROC AUC, while the constrained run has slightly higher average precision.
+
+| Run         | Accuracy | Precision | Recall |     F1 | ROC AUC |     AP | Confusion matrix (TN / FP / FN / TP) |
+| ----------- | -------: | --------: | -----: | -----: | ------: | -----: | -----------------------------------: |
+| Constrained |   0.6877 |    0.6720 | 0.7332 | 0.7013 |  0.7589 | 0.7665 |              3211 / 1789 / 1334 / 3666 |
+| Open data   |   0.6966 |    0.6741 | 0.7612 | 0.7150 |  0.7686 | 0.7607 |              3160 / 1840 / 1194 / 3806 |
+
+**Table 3.** Official challenge evaluation results. The confusion matrix is reported with synthetic images as the positive class: TN is real predicted real, FP is real predicted synthetic, FN is synthetic predicted real, and TP is synthetic predicted synthetic.
+
+The open-data run improves official F1 by 0.0137 and ROC AUC by 0.0097 over the constrained run. The gain is again recall-driven: recall increases from 0.7332 to 0.7612, while precision changes only from 0.6720 to 0.6741. This suggests that the additional TrueFake social data helps the detector identify more synthetic images under the official evaluation distribution, but it does not substantially reduce false positives.
+
 ## 5. Discussion
 
-The results support two main observations. First, layer-wise CLIP features are useful for synthetic image detection: a compact fusion head over intermediate representations achieves reasonable validation performance without full end-to-end training of the large visual encoder. This is consistent with prior CLIP-based detection results [Cozzolino2024] and with the RINE hypothesis that intermediate representations retain useful forensic information [Koutlis2024]. Second, training data diversity matters. Adding TrueFake social images improves both the main validation metrics and robustness checks, especially for small images and post-processed inputs.
+The results support two main observations. First, layer-wise CLIP features are useful for synthetic image detection: a compact fusion head over intermediate representations achieves reasonable validation and official evaluation performance without full end-to-end training of the large visual encoder. This is consistent with prior CLIP-based detection results [Cozzolino2024] and with the RINE hypothesis that intermediate representations retain useful forensic information [Koutlis2024]. Second, training data diversity matters. Adding TrueFake social images improves local validation metrics, selected robustness checks, and official thresholded metrics, especially recall. However, the official average precision is slightly lower for the open-data run, so the benefit of broader data is not uniform across every ranking metric.
 
 The calibrated thresholds are much smaller than 0.5. This indicates that the raw probabilities are not well calibrated in an absolute probabilistic sense, even though the ranking metrics remain informative. For deployment, threshold selection should therefore be treated as part of the evaluation protocol and recalibrated when the target distribution changes.
 
 The robustness results also show that common post-processing operations remain challenging. JPEG recompression and laundering reduce performance relative to the clean validation setting. This is important because real-world synthetic images are often shared after resizing, recompression, screenshotting, or platform-specific processing. These findings align with prior concerns that detectors can learn dataset-specific compression or resolution artifacts rather than generator-invariant evidence [Grommelt2024].
 
+The gap between local validation and official evaluation further reinforces this point. The best local F1 is 0.7916, whereas the best official F1 is 0.7150. The official confusion matrices show many false positives for both submissions, with 1,789 real images predicted synthetic by the constrained run and 1,840 by the open-data run. This indicates that stronger ranking and recall must be balanced against false-positive behavior when moving from development splits to challenge data.
+
 More complex alternatives, such as forgery-aware adaptive transformer architectures, may offer stronger generalization but introduce additional modules and training complexity [Liu2024]. Our design favors a lightweight representation-learning route: use a strong pretrained encoder, expose intermediate features, and spend the limited training budget on the fusion head and final encoder adaptation.
 
 ## 6. Conclusion
 
-We presented a synthetic image detector based on layer-wise fusion of pretrained CLIP visual features. The method learns a soft weighting over intermediate transformer block representations and trains a compact binary classifier for real-vs-synthetic prediction. On local validation data, the open-data model outperforms the constrained model, indicating that broader training data improves both accuracy and robustness.
+We presented a synthetic image detector based on layer-wise fusion of pretrained CLIP visual features. The method learns a soft weighting over intermediate transformer block representations and trains a compact binary classifier for real-vs-synthetic prediction. On local validation data, the open-data model outperforms the constrained model, indicating that broader training data improves both accuracy and robustness. On the official challenge evaluation, the open-data run also improves F1 and ROC AUC, mainly through higher recall, although false positives and distribution shift remain important limitations.
 
 ## References
 

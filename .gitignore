@@ -40,3 +40,5 @@ runs/
 wandb/
 mlruns/
 latex
+presentation
+fonts
