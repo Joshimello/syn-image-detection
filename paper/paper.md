@@ -2,9 +2,15 @@
 
 **Authors:** Jeng Wen Joshua Lean
 
+**Affiliation:** National Tsing Hua University, Taiwan
+
+**Email:** joshualeanjw@gmail.com
+
 ## Abstract
 
 Synthetic image detection aims to determine whether an image is real or generated. We study a CLIP-based detector for MediaEval 2026 Synthetic Image Detection Task A that uses layer-wise visual representations from a pretrained ViT-L/14 image encoder. Inspired by prior work on intermediate CLIP representations for synthetic image detection, the detector learns to fuse class-token features from all visual transformer blocks instead of relying only on the final encoder embedding. The system is evaluated in two training regimes: a constrained setting using COCO real images and Corvi synthetic images, and an open-data setting that additionally includes TrueFake social images. On a local in-the-wild validation split, the constrained model achieves F1 0.7555, ROC AUC 0.8114, and average precision 0.7963. The open-data model improves to F1 0.7916, ROC AUC 0.8643, and average precision 0.8541. These results suggest that intermediate CLIP features provide a practical representation for synthetic image detection, while broader training data improves robustness to social-media-style imagery.
+
+![Teaser overview of the layer-wise CLIP feature-fusion detector.](teaser_detection_overview.png)
 
 ## 1. Introduction
 
